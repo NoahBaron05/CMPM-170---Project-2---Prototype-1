@@ -428,7 +428,6 @@ MonoBehaviour:
   segmentCount: 5
   headSize: 0.45
   segmentSize: 0.34
-  moveSpeed: 30
   segmentSpacing: 0.35
   climbSpeed: 30
   windowDamageRadius: 0.9
@@ -440,6 +439,9 @@ MonoBehaviour:
   buildingHeightMax: 5.4
   windowColumnSpacing: 0.55
   windowRowSpacing: 0.55
+  movementInterval: 0.04
+  moveDistancePerAction: 0.5
+  climbDistancePerAction: 0.25
 --- !u!4 &1534491987
 Transform:
   m_ObjectHideFlags: 0

@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.InputSystem;
+using System.Collections;
 
 /// <summary>
 /// Tiny, self-contained first prototype: builds a city and a controllable centipede at runtime.
@@ -12,13 +13,13 @@ public class GameManager : MonoBehaviour
     [Min(2)] public int segmentCount = 5;
     [Min(0.1f)] public float headSize = 0.42f;
     [Min(0.1f)] public float segmentSize = 0.34f;
-    [Min(1f)] public float moveSpeed = 20f;
     [Min(0.1f)] public float segmentSpacing = 0.55f;
     public float climbSpeed = 5.5f;
     [Min(0.1f)] public float windowDamageRadius = 0.9f;
 
     [Header("City")]
     public int buildingCount = 8;
+    private int currentBuildingCount;
     [Min(0.1f)] public float buildingSpacing = 2.45f;
     [Min(0.1f)] public float buildingWidthMin = 1.25f;
     [Min(0.1f)] public float buildingWidthMax = 2.15f;
@@ -37,11 +38,18 @@ public class GameManager : MonoBehaviour
     private CircleCollider2D headCollider;
     private readonly RaycastHit2D[] movementHits = new RaycastHit2D[8];
 
+    [Header("Movement")]
+    public float movementInterval = 1.5f;
+    public float moveDistancePerAction = 0.5f;
+    public float climbDistancePerAction = 0.25f;
+
+    private float movementTimer;
+
     private void Start()
     {
         BuildCamera();
-        BuildCity();
         BuildCentipede();
+        StartCoroutine(BuildCity());
     }
 
     private void Update()
@@ -49,56 +57,124 @@ public class GameManager : MonoBehaviour
         if (segments.Count == 0) return;
 
         Vector2 direction = Vector2.zero;
+
         if (Gamepad.current != null)
             direction = Gamepad.current.leftStick.ReadValue();
+
         if (Keyboard.current != null)
         {
-            if (Keyboard.current.aKey.isPressed || Keyboard.current.leftArrowKey.isPressed) direction.x -= 1f;
-            if (Keyboard.current.dKey.isPressed || Keyboard.current.rightArrowKey.isPressed) direction.x += 1f;
-            if (Keyboard.current.sKey.isPressed || Keyboard.current.downArrowKey.isPressed) direction.y -= 1f;
-            if (Keyboard.current.wKey.isPressed || Keyboard.current.upArrowKey.isPressed) direction.y += 1f;
+            if (Keyboard.current.aKey.isPressed || Keyboard.current.leftArrowKey.isPressed)
+                direction.x -= 1f;
+
+            if (Keyboard.current.dKey.isPressed || Keyboard.current.rightArrowKey.isPressed)
+                direction.x += 1f;
+
+            if (Keyboard.current.sKey.isPressed || Keyboard.current.downArrowKey.isPressed)
+                direction.y -= 1f;
+
+            if (Keyboard.current.wKey.isPressed || Keyboard.current.upArrowKey.isPressed)
+                direction.y += 1f;
         }
+
         direction = Vector2.ClampMagnitude(direction, 1f);
-        if (direction.sqrMagnitude > 0f)
+
+        movementTimer += Time.deltaTime;
+
+        if (direction.sqrMagnitude > 0f && movementTimer >= movementInterval)
         {
-            // Vertical input is deliberately slower: it gives the creature a readable climbing feel.
-            Vector2 current = centipedeBody.position;
-            Vector2 next = current;
-            next.x = MoveAxis(current, Vector2.right, direction.x * moveSpeed * Time.deltaTime);
-            current = new Vector2(next.x, current.y);
-            next.y = MoveAxis(current, Vector2.up, direction.y * climbSpeed * Time.deltaTime);
-            next.x = Mathf.Clamp(next.x, -11f, 11f);
-            next.y = Mathf.Clamp(next.y, groundY - 0.05f, 5.7f);
-            centipedeBody.MovePosition(next);
+            movementTimer = 0f;
+            PerformMovementAction(direction);
+        }
+    }
+
+    private void PerformMovementAction(Vector2 direction)
+    {
+        // Move head, resolving each axis independently
+        Vector2 current = centipedeBody.position;
+        Vector2 next = current;
+
+        // Move horizontally first
+        next.x = MoveAxis(
+            current,
+            Vector2.right,
+            direction.x * moveDistancePerAction
+        );
+
+        // Temporarily update the physics body so the next collision cast
+        // starts from the new horizontal position.
+        centipedeBody.position = new Vector2(next.x, current.y);
+        Physics2D.SyncTransforms();
+
+        // Move vertically from the updated position
+        current = centipedeBody.position;
+
+        next.y = MoveAxis(
+            current,
+            Vector2.up,
+            direction.y * climbDistancePerAction
+        );
+
+        // Apply movement boundaries
+        next.x = Mathf.Clamp(next.x, -11f, 11f);
+        next.y = Mathf.Clamp(next.y, groundY - 0.05f, 5.7f);
+
+        // Finalize movement
+        centipedeBody.position = next;
+        Physics2D.SyncTransforms();
+
+        centipedeBody.position = next;
+
+        // Update follower path
+        path.Insert(0, segments[0].position);
+
+        float requiredPath = segmentSpacing * (segments.Count + 1);
+
+        while (path.Count > 2 &&
+               Vector3.Distance(path[path.Count - 1], segments[0].position) > requiredPath)
+        {
+            path.RemoveAt(path.Count - 1);
         }
 
-        path.Insert(0, segments[0].position);
-        float requiredPath = segmentSpacing * (segments.Count + 1);
-        while (path.Count > 2 && Vector3.Distance(path[path.Count - 1], segments[0].position) > requiredPath)
-            path.RemoveAt(path.Count - 1);
-
+        // Update follower segments
         float distance = 0f;
         int pathIndex = 1;
+
         for (int i = 1; i < segments.Count; i++)
         {
             float targetDistance = segmentSpacing * i;
+
             while (pathIndex < path.Count && distance < targetDistance)
             {
-                distance += Vector3.Distance(path[pathIndex - 1], path[pathIndex]);
+                distance += Vector3.Distance(
+                    path[pathIndex - 1],
+                    path[pathIndex]
+                );
+
                 pathIndex++;
             }
+
             if (pathIndex < path.Count)
-                segments[i].position = Vector3.MoveTowards(path[pathIndex - 1], path[pathIndex], distance - targetDistance);
+            {
+                segments[i].position = Vector3.MoveTowards(
+                    path[pathIndex - 1],
+                    path[pathIndex],
+                    distance - targetDistance
+                );
+            }
             else
+            {
                 segments[i].position = segments[i - 1].position;
+            }
         }
 
+        // Update connecting lines
         for (int i = 0; i < joints.Count; i++)
         {
             joints[i].SetPosition(0, segments[i].position);
             joints[i].SetPosition(1, segments[i + 1].position);
         }
 
+        // Damage windows
         DamageWindowsUnderCentipede();
     }
 
@@ -133,39 +209,99 @@ public class GameManager : MonoBehaviour
         gameCamera.backgroundColor = new Color(0.08f, 0.13f, 0.22f);
     }
 
-    private void BuildCity()
+    private IEnumerator BuildCity()
     {
-        MakeBlock("Street", new Vector2(0f, groundY - 0.35f), new Vector2(24f, 0.7f), new Color(0.12f, 0.15f, 0.2f), -2);
+        currentBuildingCount = buildingCount;
+
+        MakeBlock(
+            "Street",
+            new Vector2(0f, groundY - 0.35f),
+            new Vector2(24f, 0.7f),
+            new Color(0.12f, 0.15f, 0.2f),
+            -2
+        );
+
         for (int i = 0; i < buildingCount; i++)
         {
             float width = Random.Range(buildingWidthMin, buildingWidthMax);
             float height = Random.Range(buildingHeightMin, buildingHeightMax);
-            // Leave a clear street-level spawn lane on the left for the centipede.
+
             float x = -6.4f + i * buildingSpacing;
-            GameObject building = MakeBlock("Building " + (i + 1), new Vector2(x, groundY + height * 0.5f), new Vector2(width, height),
-                new Color(Random.Range(0.18f, 0.34f), Random.Range(0.27f, 0.43f), Random.Range(0.4f, 0.62f)), -1);
+
+            Vector2 buildingPosition = new Vector2(
+                x,
+                groundY + height * 0.5f
+            );
+
+            Vector2 buildingSize = new Vector2(width, height);
+
+            // Wait until the player is no longer overlapping the building.
+            while (
+                Mathf.Abs(centipedeBody.position.x - buildingPosition.x) <
+                    (buildingSize.x + headSize) * 0.5f &&
+                Mathf.Abs(centipedeBody.position.y - buildingPosition.y) <
+                    (buildingSize.y + headSize) * 0.5f
+            )
+            {
+                yield return null;
+            }
+
+            // Create building.
+            GameObject building = MakeBlock(
+                "Building " + (i + 1),
+                buildingPosition,
+                buildingSize,
+                new Color(
+                    Random.Range(0.18f, 0.34f),
+                    Random.Range(0.27f, 0.43f),
+                    Random.Range(0.4f, 0.62f)
+                ),
+                -1
+            );
+
             BuildingState buildingState = new BuildingState(building);
             buildings.Add(buildingState);
 
-            // Simple lit windows make the skyline legible without adding asset dependencies.
-            for (float wx = x - width * 0.28f; wx <= x + width * 0.28f; wx += windowColumnSpacing)
-            for (float wy = groundY + 0.38f; wy < groundY + height - 0.3f; wy += windowRowSpacing)
+            // Generate windows.
+            for (float wx = x - width * 0.28f;
+                 wx <= x + width * 0.28f;
+                 wx += windowColumnSpacing)
             {
-                GameObject window = MakeBlock("Window", new Vector2(wx, wy), new Vector2(0.16f, 0.22f), new Color(0.95f, 0.72f, 0.35f), 0);
-                buildingState.AddWindow(window.GetComponent<SpriteRenderer>());
+                for (float wy = groundY + 0.38f;
+                     wy < groundY + height - 0.3f;
+                     wy += windowRowSpacing)
+                {
+                    GameObject window = MakeBlock(
+                        "Window",
+                        new Vector2(wx, wy),
+                        new Vector2(0.16f, 0.22f),
+                        new Color(0.95f, 0.72f, 0.35f),
+                        0
+                    );
+
+                    buildingState.AddWindow(
+                        window.GetComponent<SpriteRenderer>()
+                    );
+                }
             }
+
+            yield return new WaitForSeconds(0.2f);
         }
     }
 
     private void DamageWindowsUnderCentipede()
     {
-        // Compare against rendered window bounds directly; this stays reliable as follower transforms move.
+        // Create a copy so changes during iteration don't invalidate the enumerator.
+        List<BuildingState> buildingCopy = new List<BuildingState>(buildings);
+
         foreach (Transform segment in segments)
         {
-            // A slightly generous radius lets the creature damage inset window columns from the building edge.
-            float damageRadius = segment == segments[0] ? windowDamageRadius : windowDamageRadius * 0.88f;
-            foreach (BuildingState building in buildings)
+            float damageRadius = segment == segments[0] ? windowDamageRadius: windowDamageRadius * 0.88f;
+
+            foreach (BuildingState building in buildingCopy)
+            {
                 building.DamageWindowsNear(segment.position, damageRadius, this);
+            }
         }
     }
 
@@ -177,7 +313,15 @@ public class GameManager : MonoBehaviour
         {
             if (building.Contains(window))
             {
-                if (building.AllWindowsBlack()) building.Destroy();
+                if (building.AllWindowsBlack())
+                {
+                    building.Destroy();
+                    currentBuildingCount--;
+                    if (currentBuildingCount == 0)
+                    {
+                        StartCoroutine(BuildCity());
+                    }
+                }
                 return;
             }
         }
