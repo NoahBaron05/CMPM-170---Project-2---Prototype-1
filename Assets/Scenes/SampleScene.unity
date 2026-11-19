@@ -442,6 +442,14 @@ MonoBehaviour:
   movementInterval: 0.04
   moveDistancePerAction: 0.5
   climbDistancePerAction: 0.25
+  backgroundMusic: {fileID: 8300000, guid: 591f65a5092e14950b88f6794094b142, type: 3}
+  centipedeMovingSound: {fileID: 8300000, guid: c987e91dc9acf4ac391fd2a0ed521a86, type: 3}
+  windowBreakingSound: {fileID: 8300000, guid: 8dda7745a144c4faea222671c17531e3, type: 3}
+  buildingFallSound: {fileID: 8300000, guid: cd460dc964aac4a498d93c36ed1d4f35, type: 3}
+  musicVolume: 0.5
+  effectsVolume: 0.8
+  windowSoundDuration: 2
+  buildingSoundDuration: 4
 --- !u!4 &1534491987
 Transform:
   m_ObjectHideFlags: 0

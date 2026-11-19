@@ -43,10 +43,23 @@ public class GameManager : MonoBehaviour
     public float moveDistancePerAction = 0.5f;
     public float climbDistancePerAction = 0.25f;
 
+    [Header("Audio")]
+    public AudioClip backgroundMusic;
+    public AudioClip centipedeMovingSound;
+    public AudioClip windowBreakingSound;
+    public AudioClip buildingFallSound;
+    [Range(0f, 1f)] public float musicVolume = 0.5f;
+    [Range(0f, 1f)] public float effectsVolume = 0.8f;
+    [Min(0.1f)] public float windowSoundDuration = 2f;
+    [Min(0.1f)] public float buildingSoundDuration = 4f;
+
     private float movementTimer;
+    private AudioSource musicSource;
+    private AudioSource movementSource;
 
     private void Start()
     {
+        SetupAudio();
         BuildCamera();
         BuildCentipede();
         StartCoroutine(BuildCity());
@@ -78,6 +91,14 @@ public class GameManager : MonoBehaviour
 
         direction = Vector2.ClampMagnitude(direction, 1f);
 
+        if (movementSource != null)
+        {
+            if (direction.sqrMagnitude > 0f && !movementSource.isPlaying)
+                movementSource.Play();
+            else if (direction.sqrMagnitude == 0f && movementSource.isPlaying)
+                movementSource.Stop();
+        }
+
         movementTimer += Time.deltaTime;
 
         if (direction.sqrMagnitude > 0f && movementTimer >= movementInterval)
@@ -85,6 +106,34 @@ public class GameManager : MonoBehaviour
             movementTimer = 0f;
             PerformMovementAction(direction);
         }
+    }
+
+    private void SetupAudio()
+    {
+        musicSource = gameObject.AddComponent<AudioSource>();
+        musicSource.clip = backgroundMusic;
+        musicSource.loop = true;
+        musicSource.volume = musicVolume;
+        musicSource.spatialBlend = 0f;
+        if (backgroundMusic != null) musicSource.Play();
+
+        movementSource = gameObject.AddComponent<AudioSource>();
+        movementSource.clip = centipedeMovingSound;
+        movementSource.loop = true;
+        movementSource.volume = effectsVolume;
+        movementSource.spatialBlend = 0f;
+    }
+
+    private void PlayLimitedSound(AudioClip clip, float duration)
+    {
+        if (clip == null) return;
+        GameObject soundObject = new GameObject("One Shot Audio");
+        AudioSource source = soundObject.AddComponent<AudioSource>();
+        source.clip = clip;
+        source.volume = effectsVolume;
+        source.spatialBlend = 0f;
+        source.Play();
+        Destroy(soundObject, Mathf.Min(duration, clip.length));
     }
 
     private void PerformMovementAction(Vector2 direction)
@@ -308,6 +357,7 @@ public class GameManager : MonoBehaviour
     public void DamageWindow(SpriteRenderer window)
     {
         if (window == null || window.color == Color.black) return;
+        PlayLimitedSound(windowBreakingSound, windowSoundDuration);
         window.color = Color.black;
         foreach (BuildingState building in buildings)
         {
@@ -315,6 +365,7 @@ public class GameManager : MonoBehaviour
             {
                 if (building.AllWindowsBlack())
                 {
+                    PlayLimitedSound(buildingFallSound, buildingSoundDuration);
                     building.Destroy();
                     currentBuildingCount--;
                     if (currentBuildingCount == 0)
