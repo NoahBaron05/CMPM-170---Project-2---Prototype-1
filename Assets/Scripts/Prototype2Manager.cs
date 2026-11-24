@@ -288,6 +288,26 @@ public class Prototype2Manager : MonoBehaviour
         }
     }
 
+    public bool RemoveTailSegment()
+    {
+        // Keep the head alive because it owns the Rigidbody2D used by movement.
+        if (segments.Count <= 1) return false;
+
+        int tailIndex = segments.Count - 1;
+        Transform tail = segments[tailIndex];
+        segments.RemoveAt(tailIndex);
+        Destroy(tail.gameObject);
+
+        int lastJointIndex = joints.Count - 1;
+        if (lastJointIndex >= 0)
+        {
+            Destroy(joints[lastJointIndex].gameObject);
+            joints.RemoveAt(lastJointIndex);
+        }
+
+        return true;
+    }
+
     private static Sprite CreateCircleSprite()
     {
         const int size = 32;

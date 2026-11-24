@@ -24,19 +24,17 @@ public class Bullet : MonoBehaviour
             Destroy(gameObject);
         }
     }
-    private void onTriggerEnter2D(Collider2D other)
-    {
-        if(other.CompareTag("Enemy"))
-        {
-            Destroy(other.gameObject);
-            Destroy(gameObject);
-        }
-    }
     private void OnTriggerEnter2D(Collider2D other)
     {
         if (other.name.StartsWith("Centipede Segment"))
         {
-            Destroy(other.gameObject);
+            Prototype2Manager manager = FindFirstObjectByType<Prototype2Manager>();
+            if (manager != null && manager.RemoveTailSegment())
+            {
+                EnemyScript shooter = FindFirstObjectByType<EnemyScript>();
+                if (shooter != null)
+                    shooter.DoubleBulletCount();
+            }
             Destroy(gameObject);
         }
     }
