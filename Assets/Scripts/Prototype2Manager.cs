@@ -13,11 +13,22 @@ public class Prototype2Manager : MonoBehaviour
     public float climbSpeed = 5.5f;
     [Min(0.1f)] public float windowDamageRadius = 0.9f;
 
+    [Header("City Visuals")]
+    [Min(1)] public int buildingCount = 8;
+    [Min(0.1f)] public float buildingSpacing = 2.45f;
+    [Min(0.1f)] public float buildingWidthMin = 1.25f;
+    [Min(0.1f)] public float buildingWidthMax = 2.15f;
+    [Min(0.1f)] public float buildingHeightMin = 1.5f;
+    [Min(0.1f)] public float buildingHeightMax = 5.4f;
+    [Min(0.1f)] public float windowColumnSpacing = 0.42f;
+    [Min(0.1f)] public float windowRowSpacing = 0.55f;
+
     private readonly List<Transform> segments = new List<Transform>();
     private readonly List<LineRenderer> joints = new List<LineRenderer>();
     private readonly List<Vector3> path = new List<Vector3>();
     private Camera gameCamera;
     private float groundY = -3.2f;
+    private Sprite squareSprite;
     private Rigidbody2D centipedeBody;
     private CircleCollider2D headCollider;
     private readonly RaycastHit2D[] movementHits = new RaycastHit2D[8];
@@ -45,6 +56,7 @@ public class Prototype2Manager : MonoBehaviour
     {
         SetupAudio();
         BuildCamera();
+        BuildCityVisuals();
         BuildCentipede();
     }
 
@@ -286,6 +298,77 @@ public class Prototype2Manager : MonoBehaviour
             line.sortingOrder = 1;
             joints.Add(line);
         }
+    }
+
+    private void BuildCityVisuals()
+    {
+        squareSprite = CreateSquareSprite();
+
+        CreateVisualBlock(
+            "Street",
+            new Vector2(0f, groundY - 0.35f),
+            new Vector2(24f, 0.7f),
+            new Color(0.12f, 0.15f, 0.2f),
+            -2
+        );
+
+        for (int i = 0; i < buildingCount; i++)
+        {
+            float width = Random.Range(buildingWidthMin, buildingWidthMax);
+            float height = Random.Range(buildingHeightMin, buildingHeightMax);
+            float x = -6.4f + i * buildingSpacing;
+
+            CreateVisualBlock(
+                "Building " + (i + 1),
+                new Vector2(x, groundY + height * 0.5f),
+                new Vector2(width, height),
+                new Color(
+                    Random.Range(0.18f, 0.34f),
+                    Random.Range(0.27f, 0.43f),
+                    Random.Range(0.4f, 0.62f)
+                ),
+                -1
+            );
+
+            for (float wx = x - width * 0.28f;
+                 wx <= x + width * 0.28f;
+                 wx += windowColumnSpacing)
+            {
+                for (float wy = groundY + 0.38f;
+                     wy < groundY + height - 0.3f;
+                     wy += windowRowSpacing)
+                {
+                    CreateVisualBlock(
+                        "Window",
+                        new Vector2(wx, wy),
+                        new Vector2(0.16f, 0.22f),
+                        new Color(0.95f, 0.72f, 0.35f),
+                        0
+                    );
+                }
+            }
+        }
+    }
+
+    private void CreateVisualBlock(string objectName, Vector2 position, Vector2 size, Color color, int sortingOrder)
+    {
+        GameObject block = new GameObject(objectName);
+        block.transform.position = position;
+        block.transform.localScale = size;
+
+        SpriteRenderer renderer = block.AddComponent<SpriteRenderer>();
+        renderer.sprite = squareSprite;
+        renderer.color = color;
+        renderer.sortingOrder = sortingOrder;
+        // City art stays decorative: no colliders or damage behavior are added.
+    }
+
+    private static Sprite CreateSquareSprite()
+    {
+        Texture2D texture = new Texture2D(1, 1);
+        texture.SetPixel(0, 0, Color.white);
+        texture.Apply();
+        return Sprite.Create(texture, new Rect(0, 0, 1, 1), new Vector2(0.5f, 0.5f), 1f);
     }
 
     public bool RemoveTailSegment()
