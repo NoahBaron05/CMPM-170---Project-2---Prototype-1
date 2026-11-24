@@ -250,6 +250,12 @@ public class Prototype2Manager : MonoBehaviour
             renderer.sprite = CreateCircleSprite();
             renderer.color = i == 0 ? new Color(0.9f, 0.32f, 0.25f) : new Color(0.32f, 0.82f, 0.43f);
             renderer.sortingOrder = 2;
+            if (i > 0)
+            {
+                CircleCollider2D collider = segment.AddComponent<CircleCollider2D>();
+                collider.isTrigger = true;
+            }
+
             segments.Add(segment.transform);
             path.Add(segment.transform.position);
 
